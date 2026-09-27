@@ -197,7 +197,8 @@ function onSearch() {
 async function runSearch() {
   picker.loading = true
   try {
-    picker.results = await api.listRecipes(picker.q.trim())
+    const res = await api.listRecipes(picker.q.trim(), '', 1, 50)
+    picker.results = res.items
   } catch (e) {
     error.value = e.message
     picker.results = []

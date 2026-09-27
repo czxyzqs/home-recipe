@@ -34,7 +34,7 @@
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading"><span class="spinner"></span></div>
 
-    <!-- 食谱列表（iOS 分组列表） -->
+    <!-- 食谱列表（iOS 分组列表 · 分页） -->
     <div class="group list" v-if="recipes.length">
       <div v-for="r in recipes" :key="r.id" class="grow-row tappable" @click="$router.push(`/recipes/${r.id}`)">
         <div class="grow">
@@ -48,6 +48,13 @@
         </div>
         <span class="chevron">›</span>
       </div>
+    </div>
+
+    <!-- 翻页器 -->
+    <div v-if="totalPages > 1" class="pager">
+      <button class="nav-circle" :disabled="page <= 1" @click="goPage(page - 1)">‹</button>
+      <span class="page-ind">{{ page }} / {{ totalPages }} 页 · 共 {{ total }} 道</span>
+      <button class="nav-circle" :disabled="page >= totalPages" @click="goPage(page + 1)">›</button>
     </div>
 
     <div v-if="!loading && !recipes.length" class="empty">
@@ -143,17 +150,25 @@ const q = ref('')
 const category = ref('')
 const loading = ref(false)
 const error = ref('')
+const page = ref(1)
+const total = ref(0)
+const totalPages = ref(1)
+const PAGE_SIZE = 10
 
 const edit = reactive({ show: false, saving: false, form: {}, ingredientsText: '', stepsText: '', tagsText: '' })
 const ai = reactive({ show: false, prompt: '', count: 1, loading: false, error: '', done: [] })
 
 let searchTimer = null
 
-async function load() {
+async function load(targetPage = page.value) {
   loading.value = true
   error.value = ''
   try {
-    recipes.value = await api.listRecipes(q.value.trim(), category.value)
+    const res = await api.listRecipes(q.value.trim(), category.value, targetPage, PAGE_SIZE)
+    recipes.value = res.items
+    total.value = res.total
+    totalPages.value = Math.max(1, res.total_pages)
+    page.value = Math.min(targetPage, totalPages.value)
   } catch (e) {
     error.value = e.message
   } finally {
@@ -161,14 +176,20 @@ async function load() {
   }
 }
 
+function goPage(p) {
+  if (p < 1 || p > totalPages.value || p === page.value) return
+  load(p)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 function onSearch() {
   clearTimeout(searchTimer)
-  searchTimer = setTimeout(load, 250)
+  searchTimer = setTimeout(() => load(1), 250)
 }
 
 function setCategory(c) {
   category.value = c
-  load()
+  load(1)
 }
 
 onMounted(async () => {
@@ -213,7 +234,7 @@ async function saveEdit() {
     if (edit.form.id) await api.updateRecipe(edit.form.id, payload)
     else await api.createRecipe(payload)
     edit.show = false
-    await load()
+    await load(1)
     try { categories.value = await api.listCategories() } catch { /* 忽略 */ }
   } catch (e) {
     error.value = e.message
@@ -234,7 +255,7 @@ async function runAI() {
   ai.done = []
   try {
     ai.done = await api.aiGenerateRecipes(ai.prompt.trim(), ai.count)
-    await load()
+    await load(1)
   } catch (e) {
     ai.error = e.message
   } finally {
@@ -244,6 +265,11 @@ async function runAI() {
 </script>
 
 <style scoped>
+.pager {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 4px 16px 6px;
+}
+.page-ind { font-size: 14px; color: var(--label2); font-variant-numeric: tabular-nums; }
 .recipe-name { font-size: 15.5px; font-weight: 600; }
 .recipe-sub { margin-top: 2px; }
 .ai-icon {

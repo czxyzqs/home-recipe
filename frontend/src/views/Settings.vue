@@ -56,17 +56,6 @@
         </button>
       </div>
     </div>
-
-    <!-- 说明 -->
-    <div class="group-header">说明</div>
-    <div class="group" style="padding: 14px 16px;">
-      <div class="small text-2" style="line-height: 1.8">
-        任何 OpenAI 协议兼容的服务都可以使用（智谱、DeepSeek、OpenAI、通义千问、Ollama 本地模型等）。<br /><br />
-        Ollama 本地部署时 Base URL 填 <code>http://主机IP:11434/v1</code>，API Key 随意填写，模型名如 <code>qwen2.5:7b</code>。<br /><br />
-        API Key 仅保存在本机 SQLite 数据库中，不会上传到任何第三方。<br /><br />
-        AI 功能：生成周计划、按食材生成食谱、营养分析建议。
-      </div>
-    </div>
   </div>
 </template>
 
@@ -154,8 +143,4 @@ async function test() {
 .status.on { color: var(--green); }
 .status.off { color: var(--label2); }
 .preset-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-code {
-  background: var(--fill2); padding: 1px 6px; border-radius: 5px;
-  font-size: 12px; font-family: SFMono-Regular, Menlo, monospace;
-}
 </style>

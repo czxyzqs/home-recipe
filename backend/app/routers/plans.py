@@ -6,13 +6,15 @@ from sqlalchemy.orm import Session
 
 from ..database import MealLog, Recipe, SessionLocal, WeeklyPlan, WeeklyPlanItem
 from ..llm import LLMError, chat_json
-from ..schemas import PlanApplyDayIn, PlanGenerateIn
+from ..schemas import PlanApplyDayIn, PlanCreateIn, PlanGenerateIn, PlanItemIn
 from ..utils import recipe_to_dict
+from ..workcalendar import is_workday
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
 
 VALID_MEALS = ("breakfast", "lunch", "dinner", "snack")
 MEAL_ZH = {"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐", "snack": "加餐"}
+WEEKDAY_ZH = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
 def get_db():
@@ -44,6 +46,7 @@ def _plan_to_dict(db: Session, plan: WeeklyPlan) -> dict:
         "id": plan.id,
         "start_date": plan.start_date.isoformat(),
         "end_date": plan.end_date.isoformat(),
+        "mode": plan.mode or "manual",
         "note": plan.note,
         "created_at": plan.created_at.isoformat() if plan.created_at else "",
         "items": sorted(items, key=lambda x: (x["date"], VALID_MEALS.index(x["meal_type"]) if x["meal_type"] in VALID_MEALS else 9)),
@@ -101,8 +104,21 @@ async def generate_plan(data: PlanGenerateIn | None = None, db: Session = Depend
         f"- {r.name} [{r.category}] {r.calories:.0f}千卡/份 蛋白{r.protein:.0f}g" for r in recipes[:120]
     ]
 
-    dates_str = "、".join((start + timedelta(days=i)).isoformat() for i in range(7))
-    prompt = f"""你是家庭营养规划师。请为家庭安排一周（{dates_str}，共 7 天）的一日三餐计划。
+    # 周期内的工作日（跳过周末与法定节假日，保留调休补班日）
+    all_days = [start + timedelta(days=i) for i in range(7)]
+    workdays = [d for d in all_days if is_workday(d)]
+    restdays = [d for d in all_days if not is_workday(d)]
+    if not workdays:
+        raise HTTPException(400, "所选周期内没有工作日（整周都是节假日/周末），无需生成计划")
+    workdays_str = "、".join(f"{d.isoformat()}({WEEKDAY_ZH[d.weekday()]})" for d in workdays)
+    rest_str = "、".join(f"{d.isoformat()}({WEEKDAY_ZH[d.weekday()]})" for d in restdays) or "无"
+
+    prompt = f"""你是家庭营养规划师。请为家庭的工作日安排一日三餐计划。
+
+需要安排的工作日（已考虑法定节假日与周末调休补班）：
+{workdays_str}
+
+休息日（不要安排）：{rest_str}
 
 家庭最近的饮食记录（越靠上越新，请避免近期频繁重复）：
 {chr(10).join(history_lines) if history_lines else "（暂无记录）"}
@@ -111,7 +127,7 @@ async def generate_plan(data: PlanGenerateIn | None = None, db: Session = Depend
 {chr(10).join(recipe_lines)}
 
 要求：
-1. 每天 早餐 breakfast、午餐 lunch、晚餐 dinner 各一道，晚餐可额外加一道汤 snack 可选
+1. 只为上面列出的工作日安排，每个工作日 早餐 breakfast、午餐 lunch、晚餐 dinner 各一道，晚餐可额外加一道汤 snack 可选
 2. 荤素搭配、营养均衡，早餐清淡（粥/蛋/奶/面点），午晚餐有荤有素
 3. 一周内菜品尽量不重复，与最近吃过的错开
 4. 从食谱库选择的菜直接用原名；新菜要给出合理食材步骤与营养估算（1人份）
@@ -143,7 +159,7 @@ source 填 existing（食谱库已有）或 new（新菜）。新菜必须带 in
             d = date.fromisoformat(str(day.get("date", "")))
         except ValueError:
             continue
-        if not (start <= d <= end):
+        if not (start <= d <= end) or not is_workday(d):
             continue
         for meal in day.get("meals", []):
             if not isinstance(meal, dict):
@@ -185,12 +201,68 @@ source 填 existing（食谱库已有）或 new（新菜）。新菜必须带 in
     # 同周期旧计划删除，保持一周一份
     db.query(WeeklyPlan).filter(WeeklyPlan.start_date == start).delete()
 
-    plan = WeeklyPlan(start_date=start, end_date=end, note=f"AI 生成于 {date.today().isoformat()}，新增菜品：{'、'.join(created_recipes) if created_recipes else '无'}")
+    plan = WeeklyPlan(
+        start_date=start, end_date=end, mode="ai",
+        note=f"AI 生成于 {date.today().isoformat()}（仅工作日）· 休息日不安排：{rest_str} · 新增菜品：{'、'.join(created_recipes) if created_recipes else '无'}",
+    )
     plan.items = items
     db.add(plan)
     db.commit()
     db.refresh(plan)
     return _plan_to_dict(db, plan)
+
+
+@router.post("")
+def create_plan(data: PlanCreateIn, db: Session = Depends(get_db)):
+    """手工创建一个空周计划，之后可逐天挑选菜品"""
+    start = data.start_date
+    end = start + timedelta(days=6)
+    db.query(WeeklyPlan).filter(WeeklyPlan.start_date == start).delete()
+    plan = WeeklyPlan(start_date=start, end_date=end, mode="manual", note="手工创建")
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return _plan_to_dict(db, plan)
+
+
+@router.post("/{plan_id}/items", status_code=201)
+def add_plan_item(plan_id: int, data: PlanItemIn, db: Session = Depends(get_db)):
+    """往计划里添加一道菜（同一天同一道菜已存在则幂等返回）"""
+    plan = db.get(WeeklyPlan, plan_id)
+    if not plan:
+        raise HTTPException(404, "计划不存在")
+    if not (plan.start_date <= data.date <= plan.end_date):
+        raise HTTPException(400, "日期不在计划周期内")
+    if data.meal_type not in VALID_MEALS:
+        raise HTTPException(400, "餐段不合法")
+    recipe = db.get(Recipe, data.recipe_id)
+    if not recipe:
+        raise HTTPException(404, "食谱不存在")
+    dup = (
+        db.query(WeeklyPlanItem)
+        .filter(
+            WeeklyPlanItem.plan_id == plan_id,
+            WeeklyPlanItem.date == data.date,
+            WeeklyPlanItem.recipe_id == data.recipe_id,
+        )
+        .first()
+    )
+    if dup:
+        return {"ok": True, "duplicate": True, "item": {"id": dup.id}}
+    item = WeeklyPlanItem(date=data.date, meal_type=data.meal_type, recipe_id=data.recipe_id)
+    plan.items.append(item)
+    db.commit()
+    return {"ok": True, "duplicate": False, "item": {"id": item.id}}
+
+
+@router.delete("/items/{item_id}")
+def delete_plan_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.get(WeeklyPlanItem, item_id)
+    if not item:
+        raise HTTPException(404, "计划项不存在")
+    db.delete(item)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/{plan_id}/apply-day")

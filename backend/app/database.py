@@ -120,6 +120,7 @@ class WeeklyPlan(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     start_date: Mapped[date] = mapped_column(Date, index=True)
     end_date: Mapped[date] = mapped_column(Date)
+    mode: Mapped[str] = mapped_column(String(10), default="manual")  # ai=AI生成(仅工作日) / manual=手工
     note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -160,3 +161,10 @@ class Setting(Base):
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    # 旧库迁移：weekly_plans 缺 mode 列则补上
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(weekly_plans)"))]
+        if "mode" not in cols:
+            conn.execute(text("ALTER TABLE weekly_plans ADD COLUMN mode VARCHAR(10) DEFAULT 'manual'"))
+            conn.commit()

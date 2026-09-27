@@ -18,8 +18,8 @@ async function request(path, options = {}) {
 
 export const api = {
   // 食谱
-  listRecipes: (q = '', category = '') =>
-    request(`/api/recipes?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}`),
+  listRecipes: (q = '', category = '', page = 1, pageSize = 10) =>
+    request(`/api/recipes?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}&page=${page}&page_size=${pageSize}`),
   listCategories: () => request('/api/recipes/categories'),
   getRecipe: (id) => request(`/api/recipes/${id}`),
   createRecipe: (data) => request('/api/recipes', { method: 'POST', body: JSON.stringify(data) }),
@@ -43,6 +43,11 @@ export const api = {
   currentPlan: () => request('/api/plans/current'),
   generatePlan: (startDate = null) =>
     request('/api/plans/generate', { method: 'POST', body: JSON.stringify(startDate ? { start_date: startDate } : {}) }),
+  createPlan: (startDate) =>
+    request('/api/plans', { method: 'POST', body: JSON.stringify({ start_date: startDate }) }),
+  addPlanItem: (planId, data) =>
+    request(`/api/plans/${planId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  deletePlanItem: (itemId) => request(`/api/plans/items/${itemId}`, { method: 'DELETE' }),
   applyPlanDay: (planId, date) =>
     request(`/api/plans/${planId}/apply-day`, { method: 'POST', body: JSON.stringify({ date }) }),
   deletePlan: (id) => request(`/api/plans/${id}`, { method: 'DELETE' }),

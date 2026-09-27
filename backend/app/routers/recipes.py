@@ -39,7 +39,10 @@ def _save_recipe(recipe: Recipe, data: RecipeIn) -> Recipe:
 
 
 @router.get("")
-def list_recipes(q: str = "", category: str = "", db: Session = Depends(get_db)):
+def list_recipes(q: str = "", category: str = "", page: int = 1, page_size: int = 10, db: Session = Depends(get_db)):
+    """分页列表：page 从 1 开始，page_size 默认 10（最大 100）"""
+    page = max(1, page)
+    page_size = max(1, min(100, page_size))
     query = db.query(Recipe)
     if q:
         query = query.filter(
@@ -51,8 +54,20 @@ def list_recipes(q: str = "", category: str = "", db: Session = Depends(get_db))
         )
     if category:
         query = query.filter(Recipe.category == category)
-    rows = query.order_by(Recipe.updated_at.desc()).all()
-    return [recipe_to_dict(r) for r in rows]
+    total = query.count()
+    rows = (
+        query.order_by(Recipe.updated_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "items": [recipe_to_dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
 
 @router.get("/categories")

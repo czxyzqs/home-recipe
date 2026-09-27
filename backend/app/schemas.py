@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 MealType = Literal["meal", "breakfast", "lunch", "dinner", "snack"]
+PlanMealType = Literal["breakfast", "lunch", "dinner", "snack"]
 
 MEAL_TYPE_NAMES = {"meal": "用餐", "breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐", "snack": "加餐"}
 
@@ -88,6 +89,16 @@ class AIAnalyzeIn(BaseModel):
 
 class PlanGenerateIn(BaseModel):
     start_date: date | None = None  # 默认下周一
+
+
+class PlanCreateIn(BaseModel):
+    start_date: date
+
+
+class PlanItemIn(BaseModel):
+    date: date
+    meal_type: PlanMealType
+    recipe_id: int
 
 
 class LLMSettingIn(BaseModel):
