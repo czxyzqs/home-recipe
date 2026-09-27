@@ -1,0 +1,11 @@
+services:
+  home-recipe:
+    build: .
+    container_name: home-recipe
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
