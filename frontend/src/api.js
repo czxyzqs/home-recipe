@@ -11,7 +11,9 @@ async function request(path, options = {}) {
       const data = await resp.json()
       if (data.detail) msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)
     } catch { /* ignore */ }
-    throw new Error(msg)
+    const err = new Error(msg)
+    err.status = resp.status
+    throw err
   }
   return resp.json()
 }
@@ -41,8 +43,11 @@ export const api = {
 
   // 计划
   currentPlan: () => request('/api/plans/current'),
-  generatePlan: (startDate = null) =>
-    request('/api/plans/generate', { method: 'POST', body: JSON.stringify(startDate ? { start_date: startDate } : {}) }),
+  generatePlan: (startDate = null, force = false) =>
+    request('/api/plans/generate', {
+      method: 'POST',
+      body: JSON.stringify({ ...(startDate ? { start_date: startDate } : {}), force }),
+    }),
   createPlan: (startDate) =>
     request('/api/plans', { method: 'POST', body: JSON.stringify({ start_date: startDate }) }),
   addPlanItem: (planId, data) =>

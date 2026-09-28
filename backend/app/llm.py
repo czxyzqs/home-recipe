@@ -27,8 +27,10 @@ async def chat(messages: list[dict], temperature: float | None = None) -> str:
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type": "application/json",
     }
+    # 生成周计划等长输出场景耗时较长，读取超时放宽到 180 秒
+    timeout = httpx.Timeout(connect=15, read=180, write=15, pool=15)
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
     except httpx.HTTPError as e:
         raise LLMError(f"请求大模型失败：{e}") from e

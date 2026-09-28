@@ -25,12 +25,14 @@ def get_db():
         db.close()
 
 
-def next_monday(today: date) -> date:
-    """返回下一个周一（若今天是周一则用下周一，计划面向未来）"""
-    days_ahead = 7 - today.isoweekday()  # isoweekday: 周一=1...周日=7
-    if days_ahead == 0:
-        days_ahead = 7
-    return today + timedelta(days=days_ahead)
+def default_start(today: date) -> date:
+    """今天若为工作日则从今天开始，否则顺延到下一个工作日（最多找 30 天）"""
+    d = today
+    for _ in range(30):
+        if is_workday(d):
+            return d
+        d += timedelta(days=1)
+    return today
 
 
 def _plan_to_dict(db: Session, plan: WeeklyPlan) -> dict:
@@ -81,10 +83,16 @@ def current_plan(db: Session = Depends(get_db)):
 
 @router.post("/generate")
 async def generate_plan(data: PlanGenerateIn | None = None, db: Session = Depends(get_db)):
-    """AI 根据历史用餐记录 + 食谱库生成一周计划"""
+    """AI 根据历史用餐记录 + 食谱库生成一周计划（仅工作日）"""
     data = data or PlanGenerateIn()
-    start = data.start_date or next_monday(date.today())
+    start = data.start_date or default_start(date.today())
     end = start + timedelta(days=6)
+
+    # 同周期已有计划且未确认覆盖时，返回 409 让前端询问用户
+    existing = db.query(WeeklyPlan).filter(WeeklyPlan.start_date == start).first()
+    if existing and not data.force:
+        created = existing.created_at.date().isoformat() if existing.created_at else "未知时间"
+        raise HTTPException(409, f"{start.isoformat()} 起始的这一周已有计划（{created} 创建）。覆盖重新生成？")
 
     # 最近 14 天吃过什么（用于避免重复）
     since = date.today() - timedelta(days=14)
@@ -130,14 +138,15 @@ async def generate_plan(data: PlanGenerateIn | None = None, db: Session = Depend
 1. 只为上面列出的工作日安排，每个工作日 早餐 breakfast、午餐 lunch、晚餐 dinner 各一道，晚餐可额外加一道汤 snack 可选
 2. 荤素搭配、营养均衡，早餐清淡（粥/蛋/奶/面点），午晚餐有荤有素
 3. 一周内菜品尽量不重复，与最近吃过的错开
-4. 从食谱库选择的菜直接用原名；新菜要给出合理食材步骤与营养估算（1人份）
+4. 尽量从食谱库选择（source 填 existing，只需 name 不需要其他字段）；确实需要新菜才 source 填 new，并给出食材步骤与营养估算（1人份）
 5. 只返回 JSON，不要多余文字，格式：
 [
   {{"date": "{start.isoformat()}", "meals": [
-    {{"meal_type": "breakfast", "name": "菜名", "source": "existing", "calories": 0, "protein": 0, "fat": 0, "carbs": 0, "ingredients": [{{"name": "", "amount": ""}}], "steps": [""], "reason": "一句话理由"}}
+    {{"meal_type": "breakfast", "name": "库内菜名", "source": "existing"}},
+    {{"meal_type": "dinner", "name": "新菜名", "source": "new", "calories": 0, "protein": 0, "fat": 0, "carbs": 0, "ingredients": [{{"name": "", "amount": ""}}], "steps": [""]}}
   ]}}
 ]
-source 填 existing（食谱库已有）或 new（新菜）。新菜必须带 ingredients/steps/营养字段。"""
+existing 条目严禁输出多余字段；new 条目必须带 ingredients/steps/营养字段。"""
 
     try:
         result = await chat_json([{"role": "user", "content": prompt}])

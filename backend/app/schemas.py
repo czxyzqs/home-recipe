@@ -88,7 +88,8 @@ class AIAnalyzeIn(BaseModel):
 
 
 class PlanGenerateIn(BaseModel):
-    start_date: date | None = None  # 默认下周一
+    start_date: date | None = None  # 默认今天（工作日）或下一个工作日
+    force: bool = False  # 同周期已有计划时是否直接覆盖（False 时返回 409 由前端确认）
 
 
 class PlanCreateIn(BaseModel):

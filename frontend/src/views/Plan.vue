@@ -178,15 +178,31 @@ async function load() {
   }
 }
 
-async function generate() {
+function friendlyError(e) {
+  let msg = e.message || String(e)
+  if (/超时|timeout|timed out|ReadTimeout/i.test(msg)) {
+    msg += '\n生成内容较多时容易超时，请重试；若反复失败，建议在「设置」中换用更快的模型（如 glm-4-flash）。'
+  }
+  return msg
+}
+
+async function generate(force = false) {
   generating.value = true
   error.value = ''
   message.value = ''
   try {
-    plan.value = await api.generatePlan()
-    message.value = '已生成新的一周计划'
+    plan.value = await api.generatePlan(null, force)
+    message.value = force ? '已覆盖生成新的一周计划' : '已生成新的一周计划'
   } catch (e) {
-    error.value = e.message
+    if (e.status === 409 && !force) {
+      // 同周期已有计划，询问是否覆盖
+      if (confirm(e.message)) {
+        generating.value = false
+        return generate(true)
+      }
+    } else {
+      error.value = friendlyError(e)
+    }
   } finally {
     generating.value = false
   }
