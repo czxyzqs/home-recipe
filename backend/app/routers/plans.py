@@ -12,8 +12,8 @@ from ..workcalendar import is_workday
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
 
-VALID_MEALS = ("breakfast", "lunch", "dinner", "snack")
-MEAL_ZH = {"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐", "snack": "加餐"}
+VALID_MEALS = ("meal", "breakfast", "lunch", "dinner", "snack")
+MEAL_ZH = {"meal": "", "breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐", "snack": "加餐"}
 WEEKDAY_ZH = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
@@ -51,7 +51,7 @@ def _plan_to_dict(db: Session, plan: WeeklyPlan) -> dict:
         "mode": plan.mode or "manual",
         "note": plan.note,
         "created_at": plan.created_at.isoformat() if plan.created_at else "",
-        "items": sorted(items, key=lambda x: (x["date"], VALID_MEALS.index(x["meal_type"]) if x["meal_type"] in VALID_MEALS else 9)),
+        "items": sorted(items, key=lambda x: (x["date"], x["id"])),
     }
 
 
@@ -121,29 +121,28 @@ async def generate_plan(data: PlanGenerateIn | None = None, db: Session = Depend
     workdays_str = "、".join(f"{d.isoformat()}({WEEKDAY_ZH[d.weekday()]})" for d in workdays)
     rest_str = "、".join(f"{d.isoformat()}({WEEKDAY_ZH[d.weekday()]})" for d in restdays) or "无"
 
-    prompt = f"""你是家庭营养规划师。请为家庭的工作日安排一日三餐计划。
+    prompt = f"""你是家庭营养规划师。请为家庭的工作日安排每日菜单。
 
 需要安排的工作日（已考虑法定节假日与周末调休补班）：
 {workdays_str}
 
 休息日（不要安排）：{rest_str}
 
-家庭最近的饮食记录（越靠上越新，请避免近期频繁重复）：
+家庭最近的饮食记录（越靠上越新，请参考每餐数量与口味习惯，避免近期频繁重复）：
 {chr(10).join(history_lines) if history_lines else "（暂无记录）"}
 
-现有食谱库（优先从中选择，也可以新创菜品）：
+现有食谱库（优先从中选择）：
 {chr(10).join(recipe_lines)}
 
 要求：
-1. 只为上面列出的工作日安排，每个工作日 早餐 breakfast、午餐 lunch、晚餐 dinner 各一道，晚餐可额外加一道汤 snack 可选
-2. 荤素搭配、营养均衡，早餐清淡（粥/蛋/奶/面点），午晚餐有荤有素
+1. 只为上面列出的工作日安排，每个工作日 4 道菜，荤素搭配（如 2 荤 2 素，可含一道汤）
+2. 若家庭暂无历史记录，则全部从食谱库中挑选（source 一律 existing），不要新创菜品；有历史记录时也优先从食谱库选择，确实需要新菜才 source 填 new，并给出食材步骤与营养估算（1人份）
 3. 一周内菜品尽量不重复，与最近吃过的错开
-4. 尽量从食谱库选择（source 填 existing，只需 name 不需要其他字段）；确实需要新菜才 source 填 new，并给出食材步骤与营养估算（1人份）
-5. 只返回 JSON，不要多余文字，格式：
+4. 只返回 JSON，不要多余文字，不区分早午晚餐段，格式：
 [
   {{"date": "{start.isoformat()}", "meals": [
-    {{"meal_type": "breakfast", "name": "库内菜名", "source": "existing"}},
-    {{"meal_type": "dinner", "name": "新菜名", "source": "new", "calories": 0, "protein": 0, "fat": 0, "carbs": 0, "ingredients": [{{"name": "", "amount": ""}}], "steps": [""]}}
+    {{"name": "库内菜名", "source": "existing"}},
+    {{"name": "新菜名", "source": "new", "calories": 0, "protein": 0, "fat": 0, "carbs": 0, "ingredients": [{{"name": "", "amount": ""}}], "steps": [""]}}
   ]}}
 ]
 existing 条目严禁输出多余字段；new 条目必须带 ingredients/steps/营养字段。"""
@@ -173,9 +172,6 @@ existing 条目严禁输出多余字段；new 条目必须带 ingredients/steps/
         for meal in day.get("meals", []):
             if not isinstance(meal, dict):
                 continue
-            mt = str(meal.get("meal_type", "")).strip()
-            if mt not in VALID_MEALS:
-                continue
             name = str(meal.get("name", "")).strip()
             if not name:
                 continue
@@ -202,13 +198,16 @@ existing 条目严禁输出多余字段；new 条目必须带 ingredients/steps/
                 db.flush()  # 拿到 id
                 existing_by_name[name] = recipe
                 created_recipes.append(name)
-            items.append(WeeklyPlanItem(date=d, meal_type=mt, recipe_id=recipe.id))
+            items.append(WeeklyPlanItem(date=d, meal_type="meal", recipe_id=recipe.id))
 
     if not items:
         raise HTTPException(502, "未能从大模型输出中解析出有效的计划条目")
 
-    # 同周期旧计划删除，保持一周一份
-    db.query(WeeklyPlan).filter(WeeklyPlan.start_date == start).delete()
+    # 同周期旧计划删除（含其明细项），保持一周一份
+    old_ids = [row[0] for row in db.query(WeeklyPlan.id).filter(WeeklyPlan.start_date == start).all()]
+    if old_ids:
+        db.query(WeeklyPlanItem).filter(WeeklyPlanItem.plan_id.in_(old_ids)).delete(synchronize_session=False)
+        db.query(WeeklyPlan).filter(WeeklyPlan.id.in_(old_ids)).delete(synchronize_session=False)
 
     plan = WeeklyPlan(
         start_date=start, end_date=end, mode="ai",
@@ -226,7 +225,10 @@ def create_plan(data: PlanCreateIn, db: Session = Depends(get_db)):
     """手工创建一个空周计划，之后可逐天挑选菜品"""
     start = data.start_date
     end = start + timedelta(days=6)
-    db.query(WeeklyPlan).filter(WeeklyPlan.start_date == start).delete()
+    old_ids = [row[0] for row in db.query(WeeklyPlan.id).filter(WeeklyPlan.start_date == start).all()]
+    if old_ids:
+        db.query(WeeklyPlanItem).filter(WeeklyPlanItem.plan_id.in_(old_ids)).delete(synchronize_session=False)
+        db.query(WeeklyPlan).filter(WeeklyPlan.id.in_(old_ids)).delete(synchronize_session=False)
     plan = WeeklyPlan(start_date=start, end_date=end, mode="manual", note="手工创建")
     db.add(plan)
     db.commit()

@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 MealType = Literal["meal", "breakfast", "lunch", "dinner", "snack"]
-PlanMealType = Literal["breakfast", "lunch", "dinner", "snack"]
+PlanMealType = Literal["meal", "breakfast", "lunch", "dinner", "snack"]
 
 MEAL_TYPE_NAMES = {"meal": "用餐", "breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐", "snack": "加餐"}
 

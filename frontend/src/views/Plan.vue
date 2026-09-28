@@ -14,7 +14,9 @@
 
     <div v-if="generating" class="group center" style="padding: 34px 16px;">
       <span class="spinner"></span>
-      <div class="small text-2 mt-16">大模型正在规划一周菜单，约需 20-60 秒…</div>
+      <div class="small text-2 mt-16" style="line-height: 1.7;">
+        大模型正在生成一周菜单（仅工作日）…<br />通常 1 分钟内完成，最长约 3 分钟，请勿关闭或刷新页面
+      </div>
     </div>
 
     <template v-if="plan && !generating">
@@ -29,7 +31,6 @@
         <div class="group">
           <div v-if="!day.items.length" class="grow-row" style="color: var(--label2); font-size: 14px;">还没有安排</div>
           <div v-for="item in day.items" :key="item.id" class="grow-row">
-            <span class="meal-badge" :class="item.meal_type">{{ mealZh(item.meal_type) }}</span>
             <span class="grow tappable-name" @click="item.recipe && $router.push(`/recipes/${item.recipe.id}`)">{{ item.recipe ? item.recipe.name : '未知' }}</span>
             <span class="text-2 kcal" v-if="item.recipe">{{ Math.round(item.recipe.calories) }} 千卡</span>
             <button class="del-btn" @click="removeItem(item)">−</button>
@@ -76,13 +77,6 @@
           <button class="sheet-close" @click="picker.show = false">完成</button>
         </div>
         <div class="sheet-body">
-          <div class="meal-chips">
-            <button
-              v-for="mt in PLAN_MEALS" :key="mt.key"
-              class="chip" :class="{ active: picker.mealType === mt.key }"
-              @click="picker.mealType = mt.key"
-            >{{ mt.zh }}</button>
-          </div>
           <div class="search-box" style="margin: 0 0 10px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
             <input v-model="picker.q" placeholder="搜索食谱" @input="onSearch" />
@@ -115,10 +109,7 @@
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
 import { api } from '../api'
-import { addDays, fmtDate, mondayOf, parseDate, weekdayZh, MEAL_TYPES } from '../utils'
-
-const PLAN_MEALS = MEAL_TYPES  // breakfast/lunch/dinner/snack
-const MEAL_ZH = Object.fromEntries(MEAL_TYPES.map(m => [m.key, m.zh]))
+import { addDays, fmtDate, parseDate, weekdayZh } from '../utils'
 
 const plan = ref(null)
 const generating = ref(false)
@@ -127,14 +118,10 @@ const message = ref('')
 
 const create = reactive({ show: false, startDate: '' })
 const picker = reactive({
-  show: false, day: null, dayLabel: '', mealType: 'lunch',
+  show: false, day: null, dayLabel: '',
   q: '', results: [], loading: false, addedCount: 0,
 })
 let searchTimer = null
-
-function mealZh(key) {
-  return MEAL_ZH[key] || key
-}
 
 // 手工计划展开全部 7 天（便于挑选）；AI 计划只显示有安排的工作日（休息日不生成）
 const days = computed(() => {
@@ -235,8 +222,6 @@ function openPicker(day) {
   picker.dayLabel = day.label
   picker.q = ''
   picker.addedCount = 0
-  // 默认选中当前最少安排的餐段之后：简单起见默认午餐
-  picker.mealType = 'lunch'
   runSearch()
 }
 
@@ -263,7 +248,7 @@ async function pickRecipe(r) {
   try {
     await api.addPlanItem(plan.value.id, {
       date: picker.day,
-      meal_type: picker.mealType,
+      meal_type: 'meal',
       recipe_id: r.id,
     })
     picker.addedCount += 1
@@ -308,17 +293,6 @@ async function removePlan() {
 <style scoped>
 .nav-hint { font-size: 14px; color: var(--label2); padding: 0 20px 14px; }
 
-.meal-badge {
-  flex-shrink: 0; font-size: 12px; font-weight: 600;
-  padding: 3px 9px; border-radius: 6px;
-  background: var(--fill2); color: var(--label2);
-  min-width: 44px; text-align: center;
-}
-.meal-badge.breakfast { background: rgba(255, 149, 0, 0.13); color: var(--orange); }
-.meal-badge.lunch { background: rgba(0, 122, 255, 0.1); color: var(--blue); }
-.meal-badge.dinner { background: rgba(175, 82, 222, 0.11); color: var(--purple); }
-.meal-badge.snack { background: rgba(52, 199, 89, 0.13); color: var(--green); }
-
 .tappable-name { font-weight: 500; font-size: 15px; cursor: pointer; }
 .kcal { font-size: 13px; font-variant-numeric: tabular-nums; }
 .del-btn {
@@ -339,7 +313,6 @@ async function removePlan() {
 .text-action.sub { color: var(--green); }
 .text-action:active { opacity: 0.4; }
 
-.meal-chips { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .pick-list { max-height: 46vh; overflow-y: auto; }
 .pick-item {
   display: flex; align-items: center; gap: 10px;
