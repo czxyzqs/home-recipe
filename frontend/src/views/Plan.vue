@@ -4,7 +4,7 @@
       <div class="nav-title">周计划</div>
       <div class="row" style="gap: 14px;">
         <button class="nav-action" @click="openCreate">＋ 新建</button>
-        <button class="nav-action" :disabled="generating" @click="generate">✨ 生成</button>
+        <button class="nav-action" :disabled="generating" @click="generate()">✨ 生成</button>
       </div>
     </div>
     <div class="nav-hint">AI 参考历史记录生成，或手工从食谱库挑选</div>
@@ -186,15 +186,16 @@ function friendlyError(e) {
   return msg
 }
 
-async function generate(force = false) {
+async function generate(force) {
+  const forceYes = force === true  // 防御：事件对象等非布尔值一律视为 false
   generating.value = true
   error.value = ''
   message.value = ''
   try {
-    plan.value = await api.generatePlan(null, force)
-    message.value = force ? '已覆盖生成新的一周计划' : '已生成新的一周计划'
+    plan.value = await api.generatePlan(null, forceYes)
+    message.value = forceYes ? '已覆盖生成新的一周计划' : '已生成新的一周计划'
   } catch (e) {
-    if (e.status === 409 && !force) {
+    if (e.status === 409 && !forceYes) {
       // 同周期已有计划，询问是否覆盖
       if (confirm(e.message)) {
         generating.value = false
