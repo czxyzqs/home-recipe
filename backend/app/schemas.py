@@ -91,7 +91,7 @@ class PlanGenerateIn(BaseModel):
 
 
 class PlanCreateIn(BaseModel):
-    start_date: date
+    start_date: date | None = None  # 默认今天（工作日）或下一个工作日
 
 
 class PlanItemIn(BaseModel):

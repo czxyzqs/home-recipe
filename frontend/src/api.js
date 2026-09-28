@@ -43,6 +43,7 @@ export const api = {
 
   // 计划
   currentPlan: () => request('/api/plans/current'),
+  defaultPlanStart: () => request('/api/plans/default-start'),
   generatePlan: (startDate = null, force = false) =>
     request('/api/plans/generate', {
       method: 'POST',

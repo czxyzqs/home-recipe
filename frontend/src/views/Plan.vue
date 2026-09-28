@@ -61,7 +61,7 @@
           <div class="field">
             <label>开始日期（周一）</label>
             <input v-model="create.startDate" type="date" class="input" />
-            <div class="help">默认从下周一开始，共 7 天；创建后可逐天挑选菜品</div>
+            <div class="help">默认从今天（或下一个工作日）开始，仅安排 7 天内的工作日，休息日不展示；创建后可逐天挑选菜品</div>
           </div>
           <button class="btn btn-primary btn-block" :disabled="!create.startDate" @click="submitCreate">创建</button>
         </div>
@@ -109,7 +109,7 @@
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
 import { api } from '../api'
-import { addDays, fmtDate, parseDate, weekdayZh } from '../utils'
+import { fmtDate, parseDate, weekdayZh } from '../utils'
 
 const plan = ref(null)
 const generating = ref(false)
@@ -123,7 +123,7 @@ const picker = reactive({
 })
 let searchTimer = null
 
-// 手工计划展开全部 7 天（便于挑选）；AI 计划只显示有安排的工作日（休息日不生成）
+// 展示周期内的工作日（休息日不展示），AI 与手工计划统一逻辑
 const days = computed(() => {
   if (!plan.value) return []
   const today = fmtDate(new Date())
@@ -131,7 +131,10 @@ const days = computed(() => {
   for (const item of plan.value.items) {
     ;(byDate[item.date] = byDate[item.date] || []).push(item)
   }
-  const toDay = (ds) => {
+  const list = (plan.value.workdays && plan.value.workdays.length
+    ? plan.value.workdays
+    : Object.keys(byDate).sort())
+  return list.map(ds => {
     const d = parseDate(ds)
     return {
       date: ds,
@@ -139,12 +142,7 @@ const days = computed(() => {
       isToday: ds === today,
       items: byDate[ds] || [],
     }
-  }
-  if (plan.value.mode === 'manual') {
-    const start = parseDate(plan.value.start_date)
-    return Array.from({ length: 7 }, (_, i) => toDay(fmtDate(addDays(start, i))))
-  }
-  return Object.keys(byDate).sort().map(toDay)
+  })
 })
 
 const addedNames = computed(() => {
@@ -196,14 +194,13 @@ async function generate(force) {
   }
 }
 
-function nextMondayStr() {
-  // 本周一（无论今天周几）+7 = 下周一
-  return fmtDate(addDays(mondayOf(new Date()), 7))
-}
-
-function openCreate() {
-  create.startDate = nextMondayStr()
+async function openCreate() {
+  create.startDate = ''
   create.show = true
+  try {
+    const res = await api.defaultPlanStart()  // 默认今天（工作日）或下一个工作日
+    create.startDate = res.start_date
+  } catch { /* 忽略，用户可自选日期 */ }
 }
 
 async function submitCreate() {

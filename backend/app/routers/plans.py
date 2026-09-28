@@ -42,6 +42,13 @@ def _plan_to_dict(db: Session, plan: WeeklyPlan) -> dict:
             "meal_type": it.meal_type,
             "recipe": recipe_to_dict(it.recipe) if it.recipe else None,
         })
+    # 周期内的所有工作日（休息日不展示，前后端统一依据）
+    workdays = []
+    d = plan.start_date
+    while d <= plan.end_date:
+        if is_workday(d):
+            workdays.append(d.isoformat())
+        d += timedelta(days=1)
     return {
         "id": plan.id,
         "start_date": plan.start_date.isoformat(),
@@ -49,6 +56,7 @@ def _plan_to_dict(db: Session, plan: WeeklyPlan) -> dict:
         "mode": plan.mode or "manual",
         "note": plan.note,
         "created_at": plan.created_at.isoformat() if plan.created_at else "",
+        "workdays": workdays,
         "items": sorted(items, key=lambda x: (x["date"], x["id"])),
     }
 
@@ -216,10 +224,16 @@ existing 条目严禁输出多余字段；new 条目必须带 ingredients/steps/
     return _plan_to_dict(db, plan)
 
 
+@router.get("/default-start")
+def get_default_start():
+    """新建计划的默认开始日期：今天（工作日）或下一个工作日"""
+    return {"start_date": default_start(date.today()).isoformat()}
+
+
 @router.post("")
 def create_plan(data: PlanCreateIn, db: Session = Depends(get_db)):
     """手工创建一个空周计划，之后可逐天挑选菜品"""
-    start = data.start_date
+    start = data.start_date or default_start(date.today())
     end = start + timedelta(days=6)
     old_ids = [row[0] for row in db.query(WeeklyPlan.id).filter(WeeklyPlan.start_date == start).all()]
     if old_ids:
@@ -240,6 +254,8 @@ def add_plan_item(plan_id: int, data: PlanItemIn, db: Session = Depends(get_db))
         raise HTTPException(404, "计划不存在")
     if not (plan.start_date <= data.date <= plan.end_date):
         raise HTTPException(400, "日期不在计划周期内")
+    if not is_workday(data.date):
+        raise HTTPException(400, "该日期是休息日（周末/节假日），无需安排")
     recipe = db.get(Recipe, data.recipe_id)
     if not recipe:
         raise HTTPException(404, "食谱不存在")
