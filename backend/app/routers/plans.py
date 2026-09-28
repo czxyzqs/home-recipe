@@ -12,8 +12,6 @@ from ..workcalendar import is_workday
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
 
-VALID_MEALS = ("meal", "breakfast", "lunch", "dinner", "snack")
-MEAL_ZH = {"meal": "", "breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐", "snack": "加餐"}
 WEEKDAY_ZH = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
@@ -100,9 +98,7 @@ async def generate_plan(data: PlanGenerateIn | None = None, db: Session = Depend
     history_lines = []
     for log in logs[:60]:
         name = log.recipe.name if log.recipe else (log.custom_name or "未命名")
-        meal = MEAL_ZH.get(log.meal_type, "")
-        suffix = f"({meal})" if meal else ""
-        history_lines.append(f"{log.date.isoformat()}{suffix}: {name}")
+        history_lines.append(f"{log.date.isoformat()}: {name}")
 
     # 食谱库摘要
     recipes = db.query(Recipe).order_by(Recipe.id).all()
@@ -135,10 +131,10 @@ async def generate_plan(data: PlanGenerateIn | None = None, db: Session = Depend
 {chr(10).join(recipe_lines)}
 
 要求：
-1. 只为上面列出的工作日安排，每个工作日 4 道菜，荤素搭配（如 2 荤 2 素，可含一道汤）
+1. 只为上面列出的工作日安排，每个工作日恰好 4 道菜：1 道大荤（红烧/炖煮/鱼虾类整道荤菜）+ 1~2 道肉炒类（如肉炒时蔬、肉烧茄子）+ 1~2 道蔬菜类（清炒绿叶菜等），合计 4 道
 2. 若家庭暂无历史记录，则全部从食谱库中挑选（source 一律 existing），不要新创菜品；有历史记录时也优先从食谱库选择，确实需要新菜才 source 填 new，并给出食材步骤与营养估算（1人份）
 3. 一周内菜品尽量不重复，与最近吃过的错开
-4. 只返回 JSON，不要多余文字，不区分早午晚餐段，格式：
+4. 只返回 JSON，不要多余文字，格式：
 [
   {{"date": "{start.isoformat()}", "meals": [
     {{"name": "库内菜名", "source": "existing"}},
@@ -244,8 +240,6 @@ def add_plan_item(plan_id: int, data: PlanItemIn, db: Session = Depends(get_db))
         raise HTTPException(404, "计划不存在")
     if not (plan.start_date <= data.date <= plan.end_date):
         raise HTTPException(400, "日期不在计划周期内")
-    if data.meal_type not in VALID_MEALS:
-        raise HTTPException(400, "餐段不合法")
     recipe = db.get(Recipe, data.recipe_id)
     if not recipe:
         raise HTTPException(404, "食谱不存在")

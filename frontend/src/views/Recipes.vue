@@ -112,7 +112,7 @@
         <div class="sheet-body">
           <div class="field">
             <label>食材或想法</label>
-            <textarea v-model="ai.prompt" class="textarea" placeholder="例如：冰箱里有西兰花、虾仁，想做清淡点的&#10;或者：适合小朋友的早餐"></textarea>
+            <textarea v-model="ai.prompt" class="textarea" placeholder="例如：冰箱里有西兰花、虾仁，想做清淡点的&#10;或者：适合小朋友的菜"></textarea>
             <div class="help">需要先在「设置」页配置大模型</div>
           </div>
           <div class="field">

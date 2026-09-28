@@ -23,10 +23,3 @@ export function addDays(d, n) {
   copy.setDate(copy.getDate() + n)
   return copy
 }
-
-export const MEAL_TYPES = [
-  { key: 'breakfast', zh: '早餐', icon: '🌅' },
-  { key: 'lunch', zh: '午餐', icon: '☀️' },
-  { key: 'dinner', zh: '晚餐', icon: '🌙' },
-  { key: 'snack', zh: '加餐', icon: '🍎' },
-]

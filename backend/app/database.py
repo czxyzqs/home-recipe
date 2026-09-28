@@ -57,7 +57,7 @@ class Recipe(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), unique=True, index=True)
-    category: Mapped[str] = mapped_column(String(50), default="家常菜")  # 早餐/荤菜/素菜/汤羹/主食/甜点
+    category: Mapped[str] = mapped_column(String(50), default="家常菜")  # 家常菜/荤菜/素菜/汤羹/甜点
     cuisine: Mapped[str] = mapped_column(String(50), default="家常")
     description: Mapped[str] = mapped_column(Text, default="")
     ingredients_text: Mapped[str] = mapped_column(Text, default="")  # JSON: [{name, amount}]
@@ -99,12 +99,12 @@ class Recipe(Base):
 
 
 class MealLog(Base):
-    """每日用餐记录（早/午/晚餐/加餐）"""
+    """每日用餐记录（不区分餐段）"""
     __tablename__ = "meal_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     date: Mapped[date] = mapped_column(Date, index=True)
-    meal_type: Mapped[str] = mapped_column(String(20))  # breakfast/lunch/dinner/snack
+    meal_type: Mapped[str] = mapped_column(String(20))  # 固定为 meal
     recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id"), nullable=True)
     custom_name: Mapped[str] = mapped_column(String(200), default="")  # 临时记录的不在库里的菜
     servings: Mapped[float] = mapped_column(Float, default=1)

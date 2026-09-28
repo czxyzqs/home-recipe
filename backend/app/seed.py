@@ -60,7 +60,7 @@ SEED_RECIPES = [
         "description": "嫩滑如布丁的蒸蛋。",
         "ingredients": [{"name": "鸡蛋", "amount": "2个"}, {"name": "温水", "amount": "150ml"}, {"name": "香油/生抽", "amount": "几滴"}],
         "steps": ["蛋液加1.5倍温水打匀过筛", "盖保鲜膜扎孔", "水开后中火蒸10分钟", "淋香油生抽"],
-        "calories": 140, "protein": 11, "fat": 9, "carbs": 2, "tags": ["早餐", "孩子爱吃"],
+        "calories": 140, "protein": 11, "fat": 9, "carbs": 2, "tags": ["孩子爱吃", "蒸蛋"],
     },
     {
         "name": "白灼虾", "category": "荤菜", "cuisine": "粤菜",
@@ -78,17 +78,17 @@ SEED_RECIPES = [
     },
     {
         "name": "小米粥", "category": "汤羹", "cuisine": "家常",
-        "description": "养胃早餐首选。",
+        "description": "养胃粥品首选。",
         "ingredients": [{"name": "小米", "amount": "80g"}, {"name": "水", "amount": "1L"}],
         "steps": ["小米淘洗", "水开下米", "小火熬25分钟至浓稠"],
-        "calories": 150, "protein": 4, "fat": 1.5, "carbs": 30, "tags": ["早餐", "养胃"],
+        "calories": 150, "protein": 4, "fat": 1.5, "carbs": 30, "tags": ["养胃", "清淡"],
     },
     {
         "name": "燕麦牛奶", "category": "汤羹", "cuisine": "西式",
-        "description": "三分钟快手营养早餐。",
+        "description": "三分钟快手营养餐。",
         "ingredients": [{"name": "即食燕麦", "amount": "40g"}, {"name": "牛奶", "amount": "250ml"}, {"name": "坚果/水果", "amount": "随意"}],
         "steps": ["牛奶加热", "冲入燕麦焖2分钟", "撒坚果水果"],
-        "calories": 220, "protein": 10, "fat": 8, "carbs": 28, "tags": ["早餐", "快手菜", "健康"],
+        "calories": 220, "protein": 10, "fat": 8, "carbs": 28, "tags": ["快手菜", "健康"],
     },
     {
         "name": "土豆炖牛肉", "category": "荤菜", "cuisine": "家常",
@@ -113,10 +113,10 @@ SEED_RECIPES = [
     },
     {
         "name": "鸡蛋灌饼", "category": "家常菜", "cuisine": "面食",
-        "description": "外酥里嫩的早餐饼。",
+        "description": "外酥里嫩的鸡蛋饼。",
         "ingredients": [{"name": "面粉", "amount": "150g"}, {"name": "鸡蛋", "amount": "1个"}, {"name": "生菜/甜面酱", "amount": "适量"}],
         "steps": ["和面醒20分钟", "擀薄刷油卷起再擀", "烙至起泡灌入蛋液", "刷酱卷生菜"],
-        "calories": 320, "protein": 11, "fat": 10, "carbs": 45, "tags": ["早餐"],
+        "calories": 320, "protein": 11, "fat": 10, "carbs": 45, "tags": ["面食"],
     },
     {
         "name": "宫保鸡丁", "category": "荤菜", "cuisine": "川菜",

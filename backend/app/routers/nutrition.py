@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..database import MealLog, SessionLocal
 from ..llm import LLMError, chat
-from ..schemas import AIAnalyzeIn, MEAL_TYPE_NAMES
+from ..schemas import AIAnalyzeIn
 from ..utils import recipe_to_dict
 
 router = APIRouter(prefix="/api/nutrition", tags=["nutrition"])
@@ -90,8 +90,7 @@ async def ai_analyze(data: AIAnalyzeIn, db: Session = Depends(get_db)):
     detail_lines = []
     for log in logs:
         name = log.recipe.name if log.recipe else (log.custom_name or "未命名")
-        meal = MEAL_TYPE_NAMES.get(log.meal_type, log.meal_type)
-        detail_lines.append(f"{log.date.isoformat()} {meal}: {name} x{log.servings}份")
+        detail_lines.append(f"{log.date.isoformat()}: {name} x{log.servings}份")
 
     total = {
         k: round(sum(r[k] for r in daily_rows), 1)
